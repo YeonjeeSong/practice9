@@ -93,6 +93,10 @@ ADD CONSTRAINT FK_DEPARTMENT_CATEGORY FOREIGN KEY (CATEGORY) REFERENCES TB_CATEG
 
 -- 10. 춘 기술대학교 학생들의 정보만이 포함되어 있는 학생일반정보 VIEW를 만들고자 한다.
 --     아래 내용을 참고하여 적절한 SQL 문을 작성하시오.
+-- <시스템 계정으로 실행>
+GRANT CREATE VIEW TO C##HOMEWORK;
+-- Grant을(를) 성공했습니다.
+
 CREATE OR REPLACE VIEW VW_학생일반정보
 (
   학번
@@ -102,9 +106,10 @@ CREATE OR REPLACE VIEW VW_학생일반정보
 AS
 SELECT
        S.STUDENT_NO
-     , S.STUDNET_NAME
+     , S.STUDENT_NAME
      , S.STUDENT_ADDRESS
   FROM TB_STUDENT S;
+-- View VW_학생일반정보이(가) 생성되었습니다.
 
 -- 11. 춘 기술대학교는 1년에 두 번씩 학과별로 학생과 지도 교수가 지도 면담을 진행한다.
 --     이를 위해 사용할 학생 이름, 학과 이름, 담당 교수 이름으로 구성되어 있는 VIEW를 만드시오.
@@ -120,10 +125,12 @@ AS
 SELECT
        S.STUDENT_NAME
      , D.DEPARTMENT_NAME
-     , P.PROFESSOR_NAME
+     , NVL(P.PROFESSOR_NAME, '지도교수 없음')
   FROM TB_STUDENT S
-  LEFT OUTER JOIN TB_DEPARTMENT D ON(S.DEPARTMENT_NO = D.DEPARTMENT_NO)
-  LEFT OUTER JOIN RB_PROFESSOR P ON(S.COACH_PROFESSOR_NO = P.PROFESSOR_NO);
+  LEFT JOIN TB_DEPARTMENT D ON(S.DEPARTMENT_NO = D.DEPARTMENT_NO)
+  LEFT JOIN TB_PROFESSOR P ON(S.COACH_PROFESSOR_NO = P.PROFESSOR_NO)
+ ORDER BY 2;
+-- View VW_지도면담이(가) 생성되었습니다.
 
 -- 12. 모든 학과의 학과별 학생 수를 확인할 수 있도록 적절한 VIEW를 작성해 보자.
 CREATE OR REPLACE VIEW VW_학과별학생수
@@ -134,14 +141,16 @@ CREATE OR REPLACE VIEW VW_학과별학생수
 AS
 SELECT
        D.DEPARTMENT_NAME
-     , COUNT(S.STUDENT_NO)
+     , COUNT(*)
   FROM TB_DEPARTMENT D
   JOIN TB_STUDENT S ON(D.DEPARTMENT_NO = S.DEPARTMENT_NO)
  GROUP BY D.DEPARTMENT_NAME;
+-- View VW_학과별학생수이(가) 생성되었습니다.
 
 -- 13. 위에서 생성한 학생일반정보 View를 통해서 학번이 A213046인 학생의 이름을
 --     본인 이름으로 변경하는 SQL 문을 작성하시오.
-UPDATE VW_지도면담 VW
+UPDATE
+       VW_학생일반정보
    SET 학생이름 = (SELECT
                          STUDENT_NAME
                     FROM TB_STUDENT
@@ -150,12 +159,68 @@ UPDATE VW_지도면담 VW
 
 -- 14. 13번에서와 같이 VIEW를 통해서 데이터가 변경될 수 있는 상황을 막으려면
 --     VIEW를 어떻게 생성해야 하는지 작성하시오.
-
+-- WITH READ ONLY 기재 시 SELECT만 가능하다.(DML 수행 불가능)
+CREATE OR REPLACE VIEW VW_학생일반정보
+(
+  학번
+, 학생이름
+, 주소
+)
+AS
+SELECT
+       S.STUDENT_NO
+     , S.STUDENT_NAME
+     , S.STUDENT_ADDRESS
+  FROM TB_STUDENT S
+  WITH READ ONLY;
 
 -- 15. 춘 기술대학교는 매년 수강 신청 기간만 되면 특정 인기 과목들에 수강 신청이 몰려
 --     문제가 되고 있다. 최근 3년을 기준으로 수강 인원이 가장 많았던 3과목을 찾는 구문을
 --     작성해 보시오.
+--     3년이 아니라 5년(2005~2009)으로 작성해야 PDF와 동일한 결과 얻을 수 있음
+-- 1. 2005 ~ 2009 기준 수강 인원이 가장 많았던 과목 조회
 SELECT
-       CLASS_NO
-     , CLASS_NAME
-     , 
+       C.CLASS_NO 과목번호
+     , C.CLASS_NAME 과목이름
+     , COUNT(*) "누적수강생수(명)"
+  FROM TB_CLASS C
+  JOIN TB_GRADE G ON(C.CLASS_NO = G.CLASS_NO)
+ WHERE SUBSTR(G.TERM_NO, 1, 4) IN ('2005', '2006', '2007', '2008', '2009')
+ GROUP BY C.CLASS_NO, C.CLASS_NAME
+ ORDER BY 3 DESC;
+
+-- 2. 1의 순위 조회
+-- 2-1. ROWNUM 이용
+SELECT
+       ROWNUM
+     , V.과목번호
+     , V.과목이름
+     , V."누적수강생수(명)"
+  FROM (SELECT
+               C.CLASS_NO 과목번호
+             , C.CLASS_NAME 과목이름
+             , COUNT(*) "누적수강생수(명)"
+          FROM TB_CLASS C
+          JOIN TB_GRADE G ON(C.CLASS_NO = G.CLASS_NO)
+         WHERE SUBSTR(G.TERM_NO, 1, 4) IN ('2005', '2006', '2007', '2008', '2009')
+         GROUP BY C.CLASS_NO, C.CLASS_NAME
+         ORDER BY 3 DESC
+       )V
+ WHERE ROWNUM <= 3;
+
+-- 2-2. RANK() OVER 이용
+SELECT
+       V.과목번호
+     , V.과목이름
+     , V."누적수강생수(명)"
+  FROM (SELECT
+               C.CLASS_NO 과목번호
+             , C.CLASS_NAME 과목이름
+             , COUNT(*) "누적수강생수(명)"
+             , RANK() OVER (ORDER BY COUNT(*) DESC) 순위
+          FROM TB_CLASS C
+          JOIN TB_GRADE G ON(C.CLASS_NO = G.CLASS_NO)
+         WHERE SUBSTR(G.TERM_NO, 1, 4) IN ('2005', '2006', '2007', '2008', '2009')
+         GROUP BY C.CLASS_NO, C.CLASS_NAME
+       )V
+ WHERE V.순위 <= 3;
