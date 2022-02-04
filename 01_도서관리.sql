@@ -6,24 +6,60 @@ SELECT
 -- 2. 4개 테이블의 구조를 파악하려고 한다. 제시된 결과처럼 TABLE_NAME,
 --    COLUMN_NAME, DATA_TYPE, DATA_DEFAULT, NULLABLE, CONSTRAINT_NAME,
 --    CONSTRAINT_TYPE, R_CONSTRAINT_NAME 값을 조회하는 SQL 구문을 작성하시오.
--- 현재 이 계정이 가지고 있는 테이블 조회
+-- 2-1. 현재 이 계정이 가지고 있는 테이블 조회
 SELECT
        UT.*
   FROM USER_TABLES UT;
 
--- 테이블이 가지고 있는 컬럼들 조회
+-- 2-2. 테이블이 가지고 있는 컬럼들 조회
 SELECT
-       TABLE_NAME
-     , COLUMN_NAME
-     , DATA_TYPE
-     , DATA_DEFAULT
-     , NULLABLE
-     , CONSTRAINT_NAME
-     , CONSTRAINT_TYPE
-     , R_CONSTRAINT_NAME
-  FROM USER_TAB_COLS
-  LEFT JOIN USER_CONS_COLUMNS USING (TABLE_NAME, COLUMN_NAME) 
-  LEFT JOIN USER_CONSTRAINTS USING  (TABLE_NAME, CONSTRAINT_NAME)
+       UTC.*
+  FROM USER_TAB_COLUMNS UTC;
+
+-- 2-3. 제약 조건 조회 - 제약 조건 이름 기준
+SELECT
+       UC.*
+  FROM USER_CONSTRAINTS UC;
+
+-- 2-4. 제약 조건 조회 - 테이블 컬럼 기준
+SELECT
+       UCC.*
+  FROM USER_CONS_COLUMNS UCC;
+
+-- 2-5. 현재 이 계정이 가지고 있는 컬럼들 조회
+SELECT
+       UTC.*
+  FROM USER_TAB_COLS UTC;
+
+-- 2-6. 테이블이 가지고 있는 컬럼들 중 원하는 컬럼, 제약 조건 조회
+--SELECT
+--       TABLE_NAME
+--     , COLUMN_NAME
+--     , DATA_TYPE
+--     , DATA_DEFAULT
+--     , NULLABLE
+--     , CONSTRAINT_NAME
+--     , CONSTRAINT_TYPE
+--     , R_CONSTRAINT_NAME
+--  FROM USER_TAB_COLS
+--  LEFT JOIN USER_CONS_COLUMNS USING (TABLE_NAME, COLUMN_NAME) 
+--  LEFT JOIN USER_CONSTRAINTS USING  (TABLE_NAME, CONSTRAINT_NAME)
+-- ORDER BY 1;
+
+SELECT
+       UTC.TABLE_NAME
+     , UTC.COLUMN_NAME
+     , UTC.DATA_TYPE
+     , UTC.DATA_DEFAULT
+     , UTC.NULLABLE
+     , UCC.CONSTRAINT_NAME
+     , UC.CONSTRAINT_TYPE
+     , UC.R_CONSTRAINT_NAME
+  FROM USER_TAB_COLS UTC
+  LEFT OUTER JOIN USER_CONS_COLUMNS UCC ON(UTC.TABLE_NAME = UCC.TABLE_NAME)
+  LEFT OUTER JOIN USER_CONS_COLUMNS UCC ON(UTC.COLUMN_NAME = UCC.COLUMN_NAME)
+  LEFT OUTER JOIN USER_CONSTRAINTS UC ON(UCC.TABLE_NAME = UC.TABLE_NAME)
+  LEFT OUTER JOIN USER_CONSTRAINTS UC ON(UCC.CONSTRAINT_NAME = UC.CONSTRAINT_NAME)
  ORDER BY 1;
 
 -- 3. 도서명이 25자 이상인 책 번호와 도서명을 화면에 출력하는 SQL 문을 작성하시오.
@@ -32,6 +68,12 @@ SELECT
      , BOOK_NM
   FROM TB_BOOK
  WHERE BOOK_NM LIKE '_________________________%';
+
+SELECT
+       BOOK_NO
+     , BOOK_NM
+  FROM TB_BOOK
+ WHERE LENGTH(BOOK_NM) >= 25;
 
 -- 4. 휴대폰 번호가 '019'로 시작하는 김씨 성을 가진 작가를 이름순으로 정렬했을 때
 --    가장 먼저 표시되는 작가 이름과 사무실 전화번호, 집 전화번호,
@@ -86,7 +128,7 @@ SELECT
 -- 5. 저작 형태가 "옮김"에 해당하는 작가들이 총 몇 명인지 계산하는
 --    SQL 구문을 작성하시오. (결과 헤더는 "작가(명)"으로 표시되도록 할 것)
 SELECT
-       COUNT(DISTINCT WRITER_NM) "작가(명)"
+       COUNT(DISTINCT W.WRITER_NM) "작가(명)"
   FROM TB_WRITER W
  -- JOIN TB_BOOK_AUTHOR BA ON(W.WRITER_NO = BA.WRITER_NO)
   JOIN TB_BOOK_AUTHOR BA USING(WRITER_NO)
@@ -140,6 +182,16 @@ SELECT
        )V
  WHERE V.순위 = 1;
 
+-- MAX 함수 사용
+SELECT
+       BOOK_NM
+     , ISSUE_DATE
+     , PUBLISHER_NM
+  FROM TB_BOOK
+ WHERE ISSUE_DATE = (SELECT
+                            MAX(ISSUE_DATE)
+                       FROM TB_BOOK);
+
 -- 8. 가장 많은 책을 쓴 작가 3명의 이름과 수량을 표시하되, 많이 쓴 순서대로 표시하는
 --    SQL 구문을 작성하시오. 단, 동명이인(同名異人) 작가는 없다고 가정한다.
 --    (결과 헤더는 "작가 이름", "권 수"로 표시되도록 할 것)
@@ -147,7 +199,8 @@ SELECT
        W.WRITER_NM
      , COUNT(BOOK_NO)
   FROM TB_WRITER W
-  JOIN TB_BOOK_AUTHOR BA ON(W.WRITER_NO = BA.WRITER_NO)
+ -- JOIN TB_BOOK_AUTHOR BA ON(W.WRITER_NO = BA.WRITER_NO)
+  JOIN TB_BOOK_AUTHOR BA USING(WRITER_NO)
  GROUP BY W.WRITER_NM
  ORDER BY 2 DESC;
 
@@ -160,7 +213,7 @@ SELECT
                W.WRITER_NM "작가 이름"
              , COUNT(BOOK_NO) "권 수"
           FROM TB_WRITER W
-          JOIN TB_BOOK_AUTHOR BA ON(W.WRITER_NO = BA.WRITER_NO)
+          JOIN TB_BOOK_AUTHOR BA USING(WRITER_NO)
          GROUP BY W.WRITER_NM
          ORDER BY 2 DESC
        )V
@@ -175,7 +228,7 @@ SELECT
              , COUNT(BOOK_NO) "권 수"
              , RANK() OVER(ORDER BY COUNT(BOOK_NO) DESC) 순위
           FROM TB_WRITER W
-          JOIN TB_BOOK_AUTHOR BA ON(W.WRITER_NO = BA.WRITER_NO)
+          JOIN TB_BOOK_AUTHOR BA USING(WRITER_NO)
          GROUP BY W.WRITER_NM
        )V
  WHERE V.순위 <= 3;
@@ -186,10 +239,10 @@ SELECT
 UPDATE
        TB_WRITER W
    SET W.REGIST_DATE = (SELECT
-                             MIN(B.ISSUE_DATE)
-                        FROM TB_BOOK B
-                        JOIN TB_BOOK_AUTHOR BA ON(B.BOOK_NO = BA.BOOK_NO)
-                       WHERE W.WRITER_NO = BA.WRITER_NO);
+                               MIN(B.ISSUE_DATE)
+                          FROM TB_BOOK B
+                          JOIN TB_BOOK_AUTHOR BA ON(B.BOOK_NO = BA.BOOK_NO)
+                         WHERE W.WRITER_NO = BA.WRITER_NO);
 -- 1,052개 행 이(가) 업데이트되었습니다.
 COMMIT;
 
@@ -256,20 +309,14 @@ SELECT
 GRANT CREATE VIEW TO C##BOOK;
 
 CREATE OR REPLACE VIEW VW_BOOK_TRANSLATOR
-(
-  도서명
-, 번역자
-, 출판일
-)
 AS
-SELECT
-       B.BOOK_NM
-     , W.WRITER_NM
-     , B.ISSUE_DATE
-  FROM TB_BOOK B
-  JOIN TB_BOOK_TRANSLATOR BT ON(B.BOOK_NO = BT.BOOK_NO)
-  JOIN TB_WRITER W ON(BT.WRITER_NO = W.WRITER_NO)
-  WITH READ ONLY;
+SELECT BOOK_NM
+     , WRITER_NM 
+  FROM TB_WRITER
+  JOIN TB_BOOK_TRANSLATOR USING (WRITER_NO)
+  JOIN TB_BOOK USING (BOOK_NO)
+ WHERE TO_CHAR(ISSUE_DATE, 'RRRR') = '2007'
+  WITH CHECK OPTION;
 
 -- 14. 새로운 출판사(춘 출판사)와 거래 계약을 맺게 되었다. 제시된 다음 정보를 입력하는
 --     SQL 구문을 작성하시오. (COMMIT 처리할 것)
@@ -317,12 +364,20 @@ SELECT
  WHERE OFFICE_TELNO LIKE '02%'
    AND OFFICE_TELNO LIKE '___________';
 
+SELECT
+       WRITER_NM
+     , OFFICE_TELNO
+  FROM TB_WRITER
+ WHERE OFFICE_TELNO LIKE '02-___-%';
+
 -- 18. 2006년 1월 기준으로 등록된 지 31년 이상 된 작가 이름을 이름순으로 표시하는
 --     SQL 구문을 작성하시오.
 SELECT
        WRITER_NM
+     , REGIST_DATE
   FROM TB_WRITER
- WHERE MONTHS_BETWEEN('060101', REGIST_DATE) >= 372;
+ WHERE MONTHS_BETWEEN('060101', REGIST_DATE) >= 372
+ ORDER BY 1;
 
 -- 19. 요즘 들어 다시금 인기를 얻고 있는 '황금가지' 출판사를 위한 기획전을 열려고 한다.
 --     '황금가지' 출판사에서 발행한 도서 중 재고 수량이 10권 미만인 도서명과 가격,
@@ -340,13 +395,14 @@ SELECT
   FROM TB_BOOK
  WHERE PUBLISHER_NM = '황금가지'
    AND STOCK_QTY < 10
- ORDER BY STOCK_QTY DESC, BOOK_NM;
+ ORDER BY 3 DESC, 1;
 
 -- 20. '아타트롤' 도서 작가와 역자를 표시하는 SQL 구문을 작성하시오.
 --     (결과 헤더는 '도서명', '저자', '역자'로 표시할 것)
 SELECT
-       B.WRITER_NM
-     , W2.WRITER_NM
+       B.BOOK_NM 도서명
+     , W1.WRITER_NM 저자
+     , W2.WRITER_NM 역자
   FROM TB_BOOK B
   JOIN TB_BOOK_AUTHOR BA ON(B.BOOK_NO = BA.BOOK_NO)
   JOIN TB_WRITER W1 ON(BA.WRITER_NO = W1.WRITER_NO)
@@ -362,9 +418,9 @@ SELECT
 SELECT
        BOOK_NM 도서명
      , STOCK_QTY "재고 수량"
-     , PRICE "가격(Org)"
-     , PRICE * 0.8 "가격(New)"
+     , TO_CHAR(PRICE, '99,999') "가격(Org)"
+     , TO_CHAR(PRICE * 0.8, '99,999') "가격(New)"
   FROM TB_BOOK
  WHERE MONTHS_BETWEEN(SYSDATE, ISSUE_DATE) >= 360
    AND STOCK_QTY >= 90
- ORDER BY "가격(New)" DESC, "가격(Org)" DESC, 도서명;
+ ORDER BY 2 DESC, 4 DESC, 1;
